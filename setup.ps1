@@ -96,7 +96,7 @@ function Install-NotepadPlusPlus {
 function Install-BGInfo {
     Write-Host "Installing BGInfo..." -ForegroundColor Green
     $bgInfoZipOutput = Join-Path -Path $DownloadPath -ChildPath "BGInfo.zip"
-    $bgInfoExtractPath = "C:\BgInfo"
+    $bgInfoExtractPath = "C:\"
     $bgInfoRegPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
     $bgInfoRegKeyName = "BgInfo" # Renamed for clarity
     $bgInfoRegKeyValue = "$bgInfoExtractPath\Bginfo.exe `"$bgInfoExtractPath\CDdefault.bgi`" /timer:0 /nolicprompt" # Added quotes around path with space
