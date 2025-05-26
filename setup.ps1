@@ -1,239 +1,393 @@
-# ---------------------------------------
+#-----------------------------------------------------------------------------------------------------------------------
+# Script: Azure VM Initial Setup
+# Description: Automates common setup tasks for new Azure Virtual Machines.
+#-----------------------------------------------------------------------------------------------------------------------
+
+#---------------------------------------
 # Download URLs - Modify if needed
-# ---------------------------------------
+#---------------------------------------
 $urls = @{
     Chrome        = "https://dl.google.com/chrome/install/latest/chrome_installer.exe"
     PsTools       = "https://download.sysinternals.com/files/PSTools.zip"
-    BareGrep      = "https://www.baremetalsoft.com/baregrep/files/baregrep-setup.exe"
-    NotepadPlus   = "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/latest/download/npp.8.6.1.Installer.x64.exe"
-    BGInfo        = "https://cdfiles-infrastucture.s3.us-east-1.amazonaws.com/BGInfo.zip" # Added BGInfo URL
+    NotepadPlus   = "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.8.1/npp.8.8.1.Installer.x64.exe" # Consider using 'latest' if the version changes often
+    BGInfo        = "https://cdfiles-infrastucture.s3.us-east-1.amazonaws.com/BGInfo.zip"
 }
 
-# ---------------------------------------
+#---------------------------------------
 # Define Paths
-# ---------------------------------------
+#---------------------------------------
 $DownloadPath = "C:\Temp"
-if (!(Test-Path $DownloadPath)) { New-Item -Path $DownloadPath -ItemType Directory -Force }
+if (!(Test-Path $DownloadPath)) {
+    Write-Host "Creating download directory: $DownloadPath"
+    New-Item -Path $DownloadPath -ItemType Directory -Force | Out-Null
+}
+
+#-----------------------------------------------------------------------------------------------------------------------
+# SECTION 1: Software Installation Functions
+#-----------------------------------------------------------------------------------------------------------------------
 
 # Function to Install Google Chrome
 function Install-Chrome {
-    Write-Host "Installing Google Chrome..."
-    $chromeInstaller = "$DownloadPath\ChromeSetup.exe"
-    Invoke-WebRequest -Uri $urls.Chrome -OutFile $chromeInstaller
-    Start-Process -FilePath $chromeInstaller -ArgumentList "/silent /install" -NoNewWindow -Wait
-    Remove-Item $chromeInstaller -Force
-    Write-Host "Google Chrome Installed."
+    Write-Host "Installing Google Chrome..." -ForegroundColor Green
+    $chromeInstaller = Join-Path -Path $DownloadPath -ChildPath "ChromeSetup.exe"
+    try {
+        Invoke-WebRequest -Uri $urls.Chrome -OutFile $chromeInstaller -ErrorAction Stop
+        Start-Process -FilePath $chromeInstaller -ArgumentList "/silent /install" -NoNewWindow -Wait
+        Write-Host "Google Chrome Installed."
+    }
+    catch {
+        Write-Warning "Failed to install Google Chrome: $($_.Exception.Message)"
+    }
+    finally {
+        if (Test-Path $chromeInstaller) {
+            Remove-Item $chromeInstaller -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 # Function to Install PsTools and Create Shortcut
 function Install-PsTools {
-    Write-Host "Installing PsTools..."
-    $psToolsZip = "$DownloadPath\PSTools.zip"
-    Invoke-WebRequest -Uri $urls.PsTools -OutFile $psToolsZip
-    Expand-Archive -Path $psToolsZip -DestinationPath "C:\Program Files\PSTools" -Force
-    Remove-Item $psToolsZip -Force
+    Write-Host "Installing PsTools..." -ForegroundColor Green
+    $psToolsZip = Join-Path -Path $DownloadPath -ChildPath "PSTools.zip"
+    $psToolsExtractPath = "C:\Program Files\PSTools" # Standardized path
+    try {
+        Invoke-WebRequest -Uri $urls.PsTools -OutFile $psToolsZip -ErrorAction Stop
+        Expand-Archive -Path $psToolsZip -DestinationPath $psToolsExtractPath -Force
+        Write-Host "PsTools extracted to $psToolsExtractPath."
 
-    # Create a desktop shortcut
-    $shortcutPath = "$env:Public\Desktop\PsTools.lnk"
-    $wshShell = New-Object -ComObject WScript.Shell
-    $shortcut = $wshShell.CreateShortcut($shortcutPath)
-    $shortcut.TargetPath = "C:\Program Files\PSTools" # Target the folder for PsTools
-    $shortcut.Save()
-    Write-Host "PsTools Installed and Shortcut Created."
-}
-
-# Function to Install BareGrep and Create Shortcut
-function Install-BareGrep {
-    Write-Host "Installing BareGrep..."
-    $bareGrepInstaller = "$DownloadPath\BareGrepSetup.exe"
-    Invoke-WebRequest -Uri $urls.BareGrep -OutFile $bareGrepInstaller
-    Start-Process -FilePath $bareGrepInstaller -ArgumentList "/S" -NoNewWindow -Wait # Silent install argument
-    Remove-Item $bareGrepInstaller -Force
-
-    # Create a desktop shortcut
-    $shortcutPath = "$env:Public\Desktop\BareGrep.lnk"
-    # Default installation path for BareGrep (adjust if your installer places it elsewhere)
-    $exePath = "C:\Program Files (x86)\BareGrep\baregrep.exe"
-    if (Test-Path $exePath) {
+        # Create a desktop shortcut
+        $shortcutPath = Join-Path -Path $env:Public -ChildPath "Desktop\PsTools.lnk"
         $wshShell = New-Object -ComObject WScript.Shell
         $shortcut = $wshShell.CreateShortcut($shortcutPath)
-        $shortcut.TargetPath = $exePath
+        $shortcut.TargetPath = $psToolsExtractPath # Target the folder for PsTools
         $shortcut.Save()
-    } else {
-        Write-Warning "BareGrep executable not found at $exePath. Shortcut not created."
+        Write-Host "PsTools Shortcut Created on Public Desktop."
     }
-    Write-Host "BareGrep Installed and Shortcut Created (if executable found)."
+    catch {
+        Write-Warning "Failed to install PsTools: $($_.Exception.Message)"
+    }
+    finally {
+        if (Test-Path $psToolsZip) {
+            Remove-Item $psToolsZip -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 # Function to Install Notepad++
 function Install-NotepadPlusPlus {
-    Write-Host "Installing Notepad++..."
-    $nppInstaller = "$DownloadPath\nppInstaller.exe"
-    Invoke-WebRequest -Uri $urls.NotepadPlus -OutFile $nppInstaller
-    Start-Process -FilePath $nppInstaller -ArgumentList "/S" -NoNewWindow -Wait # Silent install argument
-    Remove-Item $nppInstaller -Force
-    Write-Host "Notepad++ Installed."
+    Write-Host "Installing Notepad++..." -ForegroundColor Green
+    $nppInstaller = Join-Path -Path $DownloadPath -ChildPath "nppInstaller.exe"
+    try {
+        Invoke-WebRequest -Uri $urls.NotepadPlus -OutFile $nppInstaller -ErrorAction Stop
+        Start-Process -FilePath $nppInstaller -ArgumentList "/S" -NoNewWindow -Wait # Silent install argument
+        Write-Host "Notepad++ Installed."
+    }
+    catch {
+        Write-Warning "Failed to install Notepad++: $($_.Exception.Message)"
+    }
+    finally {
+        if (Test-Path $nppInstaller) {
+            Remove-Item $nppInstaller -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 # Function to Install BGInfo
 function Install-BGInfo {
-    Write-Host "Installing BGInfo..."
-    # Define BGInfo specific variables
-    $bgInfoZipOutput = "$DownloadPath\BGInfo.zip" # Use the common download path
+    Write-Host "Installing BGInfo..." -ForegroundColor Green
+    $bgInfoZipOutput = Join-Path -Path $DownloadPath -ChildPath "BGInfo.zip"
     $bgInfoExtractPath = "C:\BgInfo"
     $bgInfoRegPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-    $bgInfoRegkeyValue = "$bgInfoExtractPath\Bginfo.exe $bgInfoExtractPath\CDdefault.bgi /timer:0 /nolicprompt"
-    $bgInfoRegkey = "BgInfo"
+    $bgInfoRegKeyName = "BgInfo" # Renamed for clarity
+    $bgInfoRegKeyValue = "$bgInfoExtractPath\Bginfo.exe `"$bgInfoExtractPath\CDdefault.bgi`" /timer:0 /nolicprompt" # Added quotes around path with space
     $bgInfoRegType = "String"
 
-    # Check and remove existing BGInfo folder
-    if (Test-Path -Path $bgInfoExtractPath) {
-        Write-Host "Existing BGInfo directory found at $bgInfoExtractPath. Deleting..."
-        Remove-Item -Path $bgInfoExtractPath -Recurse -Force
-        Write-Host "Old BGInfo directory deleted."
-    } else {
-        Write-Host "No existing BGInfo directory found at $bgInfoExtractPath. Proceeding with installation."
+    try {
+        # Check and remove existing BGInfo folder
+        if (Test-Path -Path $bgInfoExtractPath) {
+            Write-Host "Existing BGInfo directory found at $bgInfoExtractPath. Deleting..."
+            Remove-Item -Path $bgInfoExtractPath -Recurse -Force
+            Write-Host "Old BGInfo directory deleted."
+        }
+        New-Item -Path $bgInfoExtractPath -ItemType Directory -Force | Out-Null
+
+        # Download BGInfo
+        Write-Host "Downloading BGInfo..."
+        if (Get-Module -ListAvailable -Name BitsTransfer) {
+            Import-Module BitsTransfer -ErrorAction SilentlyContinue
+            Start-BitsTransfer -Source $urls.BGInfo -Destination $bgInfoZipOutput -ErrorAction Stop
+        } else {
+            Write-Host "BITS module not found. Using Invoke-WebRequest."
+            Invoke-WebRequest -Uri $urls.BGInfo -OutFile $bgInfoZipOutput -ErrorAction Stop
+        }
+
+        # Extract the downloaded ZIP file
+        Write-Host "Extracting BGInfo to $bgInfoExtractPath..."
+        Expand-Archive -LiteralPath $bgInfoZipOutput -DestinationPath $bgInfoExtractPath -Force
+
+        # Add BGInfo to startup
+        Write-Host "Adding BGInfo to startup..."
+        if (!(Test-Path $bgInfoRegPath)) {
+            New-Item -Path $bgInfoRegPath -Force | Out-Null
+        }
+        New-ItemProperty -Path $bgInfoRegPath -Name $bgInfoRegKeyName -PropertyType $bgInfoRegType -Value $bgInfoRegKeyValue -Force
+
+        # Execute BGInfo
+        $bgInfoExe = Join-Path -Path $bgInfoExtractPath -ChildPath "Bginfo.exe"
+        $bgInfoConfig = Join-Path -Path $bgInfoExtractPath -ChildPath "CDdefault.bgi"
+        if (Test-Path $bgInfoExe -And Test-Path $bgInfoConfig) {
+            Write-Host "Executing BGInfo..."
+            Start-Process -FilePath $bgInfoExe -ArgumentList "`"$bgInfoConfig`" /timer:0 /nolicprompt" -NoNewWindow # Added quotes
+            Write-Host "BGInfo Installed and Executed Successfully."
+        } else {
+            Write-Warning "BGInfo.exe or CDdefault.bgi not found in $bgInfoExtractPath. BGInfo might not have been extracted correctly or is missing files."
+        }
     }
-
-    # Create a new BGInfo directory
-    New-Item -Path $bgInfoExtractPath -ItemType Directory -Force
-
-    # Import BITS module and download BGInfo
-    # Check if BITS module is available, otherwise use Invoke-WebRequest
-    if (Get-Module -ListAvailable -Name BitsTransfer) {
-        Import-Module BitsTransfer
-        Write-Host "Downloading BGInfo using BITS..."
-        Start-BitsTransfer -Source $urls.BGInfo -Destination $bgInfoZipOutput
-    } else {
-        Write-Host "BITS module not found. Downloading BGInfo using Invoke-WebRequest..."
-        Invoke-WebRequest -Uri $urls.BGInfo -OutFile $bgInfoZipOutput
+    catch {
+        Write-Warning "Failed to install BGInfo: $($_.Exception.Message)"
     }
-
-    # Extract the downloaded ZIP file
-    Write-Host "Extracting BGInfo to $bgInfoExtractPath..."
-    Expand-Archive -LiteralPath $bgInfoZipOutput -DestinationPath $bgInfoExtractPath -Force # Extract directly to BgInfo folder
-
-    # Remove the ZIP file
-    Remove-Item -Path $bgInfoZipOutput -Force
-
-    # Add BGInfo to startup
-    Write-Host "Adding BGInfo to startup..."
-    # Ensure the registry path exists before trying to set a property
-    if (!(Test-Path $bgInfoRegPath)) {
-        New-Item -Path $bgInfoRegPath -Force | Out-Null
-    }
-    New-ItemProperty -Path $bgInfoRegPath -Name $bgInfoRegkey -PropertyType $bgInfoRegType -Value $bgInfoRegkeyValue -Force
-
-    # Execute BGInfo
-    $bgInfoExe = "$bgInfoExtractPath\Bginfo.exe"
-    $bgInfoConfig = "$bgInfoExtractPath\CDdefault.bgi"
-    if (Test-Path $bgInfoExe -And Test-Path $bgInfoConfig) {
-        Write-Host "Executing BGInfo..."
-        Start-Process -FilePath $bgInfoExe -ArgumentList "$bgInfoConfig /timer:0 /nolicprompt" -NoNewWindow
-        Write-Host "BGInfo Installed and Executed Successfully."
-    } else {
-        Write-Warning "BGInfo.exe or CDdefault.bgi not found in $bgInfoExtractPath. BGInfo might not have been extracted correctly or is missing files."
+    finally {
+        if (Test-Path $bgInfoZipOutput) {
+            Remove-Item -Path $bgInfoZipOutput -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
-# Disable Server Manager Startup for All Users
-function Disable-ServerManagerPopup {
-    Write-Host "Disabling Server Manager Popup..."
+#-----------------------------------------------------------------------------------------------------------------------
+# SECTION 2: System Configuration Functions
+#-----------------------------------------------------------------------------------------------------------------------
+
+# Function to Disable Server Manager Startup for All Users (Registry Method)
+function Disable-ServerManagerPopupRegistry {
+    Write-Host "Disabling Server Manager Popup via Registry..." -ForegroundColor Yellow
     $regPath = "HKLM:\SOFTWARE\Microsoft\ServerManager"
     $regName = "DoNotOpenServerManagerAtLogon"
-    if (!(Test-Path $regPath)) {
-        New-Item -Path $regPath -Force | Out-Null
+    try {
+        if (!(Test-Path $regPath)) {
+            New-Item -Path $regPath -Force | Out-Null
+        }
+        New-ItemProperty -Path $regPath -Name $regName -Value 1 -PropertyType DWORD -Force
+        Write-Host "Server Manager Popup (Registry) Disabled."
     }
-    New-ItemProperty -Path $regPath -Name $regName -Value 1 -PropertyType DWORD -Force
-    Write-Host "Server Manager Popup Disabled."
+    catch {
+        Write-Warning "Failed to disable Server Manager Popup (Registry): $($_.Exception.Message)"
+    }
 }
 
-# Disable UAC
+# Function to Disable Server Manager Startup (Scheduled Task Method)
+function Disable-ServerManagerPopupScheduledTask {
+    Write-Host "Disabling Server Manager Popup via Scheduled Task..." -ForegroundColor Yellow
+    try {
+        Get-ScheduledTask -TaskName ServerManager -ErrorAction SilentlyContinue | Disable-ScheduledTask -ErrorAction Stop
+        Write-Host "Server Manager Popup (Scheduled Task) Disabled."
+    }
+    catch {
+        Write-Warning "Failed to disable Server Manager Popup (Scheduled Task): $($_.Exception.Message). It might not exist or another error occurred."
+    }
+}
+
+# Function to Disable User Account Control (UAC)
 function Disable-UAC {
-    Write-Host "Disabling UAC..."
+    Write-Host "Disabling UAC..." -ForegroundColor Yellow
     $regPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
     $regName = "EnableLUA"
-    if (!(Test-Path $regPath)) {
-        New-Item -Path $regPath -Force | Out-Null
+    try {
+        if (!(Test-Path $regPath)) {
+            New-Item -Path $regPath -Force | Out-Null
+        }
+        Set-ItemProperty -Path $regPath -Name $regName -Value 0 -ErrorAction Stop
+        Write-Host "UAC Disabled. A restart is required for changes to take full effect."
     }
-    Set-ItemProperty -Path $regPath -Name $regName -Value 0
-    Write-Host "UAC Disabled. Restart Required for Changes to Take Effect."
+    catch {
+        Write-Warning "Failed to disable UAC: $($_.Exception.Message)"
+    }
 }
 
-# Disable Print Spooler Service
+# Function to Disable Print Spooler Service
 function Disable-PrintSpooler {
-    Write-Host "Disabling Print Spooler Service..."
-    if (Get-Service -Name "Spooler" -ErrorAction SilentlyContinue) {
-        Stop-Service -Name "Spooler" -Force -ErrorAction SilentlyContinue
-        Set-Service -Name "Spooler" -StartupType Disabled
-        Write-Host "Print Spooler Service Disabled."
-    } else {
-        Write-Host "Print Spooler Service not found."
+    Write-Host "Disabling Print Spooler Service..." -ForegroundColor Yellow
+    $serviceName = "Spooler"
+    try {
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($service) {
+            if ($service.Status -ne 'Stopped') {
+                Stop-Service -Name $serviceName -Force -ErrorAction Stop
+            }
+            Set-Service -Name $serviceName -StartupType Disabled -ErrorAction Stop
+            Write-Host "Print Spooler Service Disabled."
+        } else {
+            Write-Host "Print Spooler Service not found."
+        }
+    }
+    catch {
+        Write-Warning "Failed to disable Print Spooler Service: $($_.Exception.Message)"
     }
 }
 
-# Disable Windows Firewall
+# Function to Disable Windows Firewall
 function Disable-Firewall {
-    Write-Host "Disabling Windows Firewall..."
-    # This command requires the NetSecurity module, which is available on modern Windows versions.
-    Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
-    Write-Host "Firewall Disabled for All Profiles."
+    Write-Host "Disabling Windows Firewall..." -ForegroundColor Yellow
+    try {
+        Set-NetFirewallProfile -Profile Domain, Public, Private -Enabled False -ErrorAction Stop
+        Write-Host "Windows Firewall Disabled for All Profiles."
+    }
+    catch {
+        Write-Warning "Failed to disable Windows Firewall: $($_.Exception.Message). Ensure NetSecurity module is available."
+    }
 }
 
-# Set RDP Sessions to Logoff After 24 Hours
+# Function to Set RDP Sessions to Logoff After 24 Hours
 function Set-RDPLogoffPolicy {
-    Write-Host "Configuring RDP to Logoff Disconnected Sessions After 24 Hours..."
-    $timeLimit = 86400000 # 24 hours in milliseconds
+    Write-Host "Configuring RDP to Logoff Disconnected Sessions After 24 Hours..." -ForegroundColor Yellow
+    $timeLimitMilliseconds = 24 * 60 * 60 * 1000 # 24 hours in milliseconds
     $regPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services"
     $regName = "MaxDisconnectionTime"
-    if (!(Test-Path $regPath)) {
-        New-Item -Path $regPath -Force | Out-Null
+    try {
+        if (!(Test-Path $regPath)) {
+            New-Item -Path $regPath -Force | Out-Null
+        }
+        New-ItemProperty -Path $regPath -Name $regName -Value $timeLimitMilliseconds -PropertyType DWord -Force -ErrorAction Stop
+        Write-Host "RDP Logoff Policy Set to 24 hours."
     }
-    New-ItemProperty -Path $regPath -Name $regName -Value $timeLimit -PropertyType DWord -Force
-    Write-Host "RDP Logoff Policy Set."
+    catch {
+        Write-Warning "Failed to set RDP Logoff Policy: $($_.Exception.Message)"
+    }
 }
 
-# Set Windows Updates to Manual (Prevent Downloads)
+# Function to Set Windows Updates to Manual (Prevent Auto Downloads/Installs)
 function Set-WindowsUpdateManual {
-    Write-Host "Setting Windows Updates to Manual..."
-    if (Get-Service -Name "wuauserv" -ErrorAction SilentlyContinue) {
-        Set-Service -Name "wuauserv" -StartupType Manual
-    } else {
-        Write-Host "Windows Update service (wuauserv) not found."
-    }
-    
+    Write-Host "Setting Windows Updates to Manual..." -ForegroundColor Yellow
+    $serviceName = "wuauserv"
     $regPathAU = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU"
-    if (!(Test-Path $regPathAU)) {
-        New-Item -Path $regPathAU -Force | Out-Null
+
+    try {
+        # Configure the service
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($service) {
+            Set-Service -Name $serviceName -StartupType Manual -ErrorAction Stop
+            Write-Host "Windows Update service (wuauserv) set to Manual startup."
+        } else {
+            Write-Host "Windows Update service (wuauserv) not found."
+        }
+
+        # Configure registry settings for update behavior
+        if (!(Test-Path $regPathAU)) {
+            New-Item -Path $regPathAU -Force | Out-Null
+        }
+        # 1 = Never check for updates (Not recommended for production unless actively managed otherwise)
+        # We'll use AUOptions to control behavior instead of completely disabling.
+        # New-ItemProperty -Path $regPathAU -Name "NoAutoUpdate" -Value 1 -PropertyType DWORD -Force
+        
+        # AUOptions:
+        # 1: Keep my computer up to date has been disabled in group policy (effectively disables automatic updates)
+        # 2: Notify for download and notify for install
+        # 3: Auto download and notify for install
+        # 4: Auto download and schedule the install
+        New-ItemProperty -Path $regPathAU -Name "AUOptions" -Value 2 -PropertyType DWORD -Force -ErrorAction Stop
+        Write-Host "Windows Updates configured to 'Notify for download and notify for install'."
     }
-    New-ItemProperty -Path $regPathAU -Name "NoAutoUpdate" -Value 1 -PropertyType DWORD -Force
-    New-ItemProperty -Path $regPathAU -Name "AUOptions" -Value 2 -PropertyType DWORD -Force # Value 2: Notify for download and notify for install
-    Write-Host "Windows Updates Set to Manual."
+    catch {
+        Write-Warning "Failed to set Windows Updates to Manual: $($_.Exception.Message)"
+    }
 }
 
-# ---------------------------------------
-# Execute All Functions
-# ---------------------------------------
+# Function to Disable IPv6 on all network adapters
+function Disable-IPv6Adapters {
+    Write-Host "Disabling IPv6 on all network adapters..." -ForegroundColor Yellow
+    try {
+        Get-NetAdapterBinding -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue | Disable-NetAdapterBinding -ComponentID ms_tcpip6 -PassThru -ErrorAction Stop
+        # Alternative: Get-NetAdapter | ForEach-Object { Disable-NetAdapterBinding -InterfaceAlias $_.Name -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue }
+        Write-Host "IPv6 disabled on network adapters. A restart may be required for changes to fully apply."
+    }
+    catch {
+        Write-Warning "Failed to disable IPv6: $($_.Exception.Message). This might require specific permissions or the NetAdapter module."
+    }
+}
+
+# Function to Show System/Hidden Files and File Extensions
+function Show-HiddenFilesAndExtensions {
+    Write-Host "Configuring Explorer to show hidden files, system files, and file extensions..." -ForegroundColor Yellow
+    $advancedPath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+    try {
+        Set-ItemProperty -Path $advancedPath -Name Hidden -Value 1 -ErrorAction Stop        # Show hidden files, folders, and drives
+        Set-ItemProperty -Path $advancedPath -Name ShowSuperHidden -Value 1 -ErrorAction Stop # Show protected operating system files
+        Set-ItemProperty -Path $advancedPath -Name HideFileExt -Value 0 -ErrorAction Stop    # Show file extensions
+        Write-Host "Explorer settings updated. May require logoff/login or explorer.exe restart to see all changes."
+    }
+    catch {
+        Write-Warning "Failed to configure Explorer settings: $($_.Exception.Message)"
+    }
+}
+
+# Function to Disable Internet Explorer Enhanced Security Configuration (IE ESC)
+function Disable-IEHardening {
+    Write-Host "Disabling Internet Explorer Enhanced Security Configuration (IE ESC)..." -ForegroundColor Yellow
+    # For Administrators
+    $regPathAdmins = 'HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A7-37EF-4b3f-8CFC-4F3A74704073}'
+    # For Users
+    $regPathUsers = 'HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A8-37EF-4b3f-8CFC-4F3A74704073}'
+    $regName = "IsInstalled"
+    $regValue = 0
+
+    try {
+        if (Test-Path -Path $regPathAdmins) {
+            Set-ItemProperty -Path $regPathAdmins -Name $regName -Value $regValue -ErrorAction Stop
+            Write-Host "IE ESC for Administrators disabled."
+        } else {
+            Write-Host "IE ESC registry key for Administrators not found."
+        }
+
+        if (Test-Path -Path $regPathUsers) {
+            Set-ItemProperty -Path $regPathUsers -Name $regName -Value $regValue -ErrorAction Stop
+            Write-Host "IE ESC for Users disabled."
+        } else {
+            Write-Host "IE ESC registry key for Users not found."
+        }
+        Write-Host "IE ESC settings updated. Changes typically apply after next logon."
+    }
+    catch {
+        Write-Warning "Failed to disable IE ESC: $($_.Exception.Message)"
+    }
+}
+
+#-----------------------------------------------------------------------------------------------------------------------
+# SECTION 3: Main Execution Block
+#-----------------------------------------------------------------------------------------------------------------------
+
 # Ensure script is run as Administrator
 if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Warning "This script requires Administrator privileges. Please re-run as Administrator."
-    # Attempt to relaunch as admin
-    # Start-Process PowerShell -Verb RunAs -ArgumentList ("-File `"{0}`"" -f $MyInvocation.MyCommand.Path)
-    # Exit # Exit current non-admin session
-    # For simplicity in this context, we'll just warn and proceed, but in production, you'd want to enforce admin rights.
+    Write-Warning "Some operations will likely fail."
+    # To enforce admin rights, you could uncomment the lines below and exit:
+    # Start-Process PowerShell -Verb RunAs -ArgumentList ("-File `"{0}`"" -f $MyInvocation.MyCommand.Definition)
+    # Exit
+} else {
+    Write-Host "Running with Administrator privileges." -ForegroundColor Cyan
 }
 
+Write-Host "`nStarting Azure VM Setup Process..." -ForegroundColor Cyan
+Write-Host "==================================================" -ForegroundColor Cyan
 
+# Install Applications
+Write-Host "`n--- Installing Applications ---" -ForegroundColor Blue
 Install-Chrome
 Install-PsTools
-Install-BareGrep
 Install-NotepadPlusPlus
-Install-BGInfo # Added BGInfo installation call
-Disable-ServerManagerPopup
+Install-BGInfo
+
+# System Configurations
+Write-Host "`n--- Applying System Configurations ---" -ForegroundColor Blue
+Disable-ServerManagerPopupRegistry      # Registry method for Server Manager popup
+Disable-ServerManagerPopupScheduledTask # Scheduled task method for Server Manager popup
 Disable-UAC
 Disable-PrintSpooler
 Disable-Firewall
 Set-RDPLogoffPolicy
 Set-WindowsUpdateManual
+Disable-IPv6Adapters
+Show-HiddenFilesAndExtensions
+Disable-IEHardening
 
-Write-Host "All tasks completed successfully!"
+Write-Host "==================================================" -ForegroundColor Cyan
+Write-Host "All tasks completed!" -ForegroundColor Cyan
+Write-Host "Note: Some changes like UAC disabling or Explorer settings may require a system restart or logoff/login to take full effect." -ForegroundColor Yellow
