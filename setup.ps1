@@ -314,6 +314,8 @@ Install-Chrome
 Install-PsTools
 Install-NotepadPlusPlus
 
+Set-TimeZone -Id "Pacific Standard Time"
+
 # System Configurations
 Write-Host "`n--- Applying System Configurations ---" -ForegroundColor Blue
 Disable-ServerManagerPopupRegistry      # Registry method for Server Manager popup
