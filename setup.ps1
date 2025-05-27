@@ -10,7 +10,6 @@ $urls = @{
     Chrome        = "https://dl.google.com/chrome/install/latest/chrome_installer.exe"
     PsTools       = "https://download.sysinternals.com/files/PSTools.zip"
     NotepadPlus   = "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.8.1/npp.8.8.1.Installer.x64.exe" # Consider using 'latest' if the version changes often
-    BGInfo        = "https://cdfiles-infrastucture.s3.us-east-1.amazonaws.com/BGInfo.zip"
 }
 
 #---------------------------------------
@@ -92,66 +91,7 @@ function Install-NotepadPlusPlus {
     }
 }
 
-# Function to Install BGInfo
-function Install-BGInfo {
-    Write-Host "Installing BGInfo..." -ForegroundColor Green
-    $bgInfoZipOutput = Join-Path -Path $DownloadPath -ChildPath "BGInfo.zip"
-    $bgInfoExtractPath = "C:\"
-    $bgInfoRegPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-    $bgInfoRegKeyName = "BgInfo" # Renamed for clarity
-    $bgInfoRegKeyValue = "$bgInfoExtractPath\Bginfo.exe `"$bgInfoExtractPath\CDdefault.bgi`" /timer:0 /nolicprompt" # Added quotes around path with space
-    $bgInfoRegType = "String"
 
-    try {
-        # Check and remove existing BGInfo folder
-        if (Test-Path -Path $bgInfoExtractPath) {
-            Write-Host "Existing BGInfo directory found at $bgInfoExtractPath. Deleting..."
-            Remove-Item -Path $bgInfoExtractPath -Recurse -Force
-            Write-Host "Old BGInfo directory deleted."
-        }
-        New-Item -Path $bgInfoExtractPath -ItemType Directory -Force | Out-Null
-
-        # Download BGInfo
-        Write-Host "Downloading BGInfo..."
-        if (Get-Module -ListAvailable -Name BitsTransfer) {
-            Import-Module BitsTransfer -ErrorAction SilentlyContinue
-            Start-BitsTransfer -Source $urls.BGInfo -Destination $bgInfoZipOutput -ErrorAction Stop
-        } else {
-            Write-Host "BITS module not found. Using Invoke-WebRequest."
-            Invoke-WebRequest -Uri $urls.BGInfo -OutFile $bgInfoZipOutput -ErrorAction Stop
-        }
-
-        # Extract the downloaded ZIP file
-        Write-Host "Extracting BGInfo to $bgInfoExtractPath..."
-        Expand-Archive -LiteralPath $bgInfoZipOutput -DestinationPath $bgInfoExtractPath -Force
-
-        # Add BGInfo to startup
-        Write-Host "Adding BGInfo to startup..."
-        if (!(Test-Path $bgInfoRegPath)) {
-            New-Item -Path $bgInfoRegPath -Force | Out-Null
-        }
-        New-ItemProperty -Path $bgInfoRegPath -Name $bgInfoRegKeyName -PropertyType $bgInfoRegType -Value $bgInfoRegKeyValue -Force
-
-        # Execute BGInfo
-        $bgInfoExe = Join-Path -Path $bgInfoExtractPath -ChildPath "Bginfo.exe"
-        $bgInfoConfig = Join-Path -Path $bgInfoExtractPath -ChildPath "CDdefault.bgi"
-        if (Test-Path $bgInfoExe -And Test-Path $bgInfoConfig) {
-            Write-Host "Executing BGInfo..."
-            Start-Process -FilePath $bgInfoExe -ArgumentList "`"$bgInfoConfig`" /timer:0 /nolicprompt" -NoNewWindow # Added quotes
-            Write-Host "BGInfo Installed and Executed Successfully."
-        } else {
-            Write-Warning "BGInfo.exe or CDdefault.bgi not found in $bgInfoExtractPath. BGInfo might not have been extracted correctly or is missing files."
-        }
-    }
-    catch {
-        Write-Warning "Failed to install BGInfo: $($_.Exception.Message)"
-    }
-    finally {
-        if (Test-Path $bgInfoZipOutput) {
-            Remove-Item -Path $bgInfoZipOutput -Force -ErrorAction SilentlyContinue
-        }
-    }
-}
 
 #-----------------------------------------------------------------------------------------------------------------------
 # SECTION 2: System Configuration Functions
@@ -373,7 +313,6 @@ Write-Host "`n--- Installing Applications ---" -ForegroundColor Blue
 Install-Chrome
 Install-PsTools
 Install-NotepadPlusPlus
-Install-BGInfo
 
 # System Configurations
 Write-Host "`n--- Applying System Configurations ---" -ForegroundColor Blue
