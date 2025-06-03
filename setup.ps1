@@ -316,6 +316,111 @@ Install-NotepadPlusPlus
 
 Set-TimeZone -Id "Pacific Standard Time"
 
+#############BGINFO################
+
+
+$downloadUrl = "https://cdfiles-infrastucture.s3.us-east-1.amazonaws.com/AzureBGInfo.zip"
+$destinationFolder = "C:\Packages\Plugins\Microsoft.Compute.BGInfo\2.2.5"
+$tempZipFileName = "AzureBGInfo.zip"
+$tempZipPath = Join-Path -Path $env:TEMP -ChildPath $tempZipFileName # Saves ZIP to user's temporary folder
+$bginfoExecutableName = "Bginfo.exe" # Or "Bginfo64.exe" - ensure this matches the file in your ZIP
+$bgiFileName = "config.bgi"          # Ensure this matches the .bgi file in your ZIP
+$messageFileName = "Message.txt"
+$messageText = "VTA Production Application Server"
+
+# --- Script Logic ---
+
+Write-Host "Starting BGInfo deployment script..."
+
+# 1. Create Destination Folder if it doesn't exist
+Write-Host "Ensuring destination folder $destinationFolder exists..."
+If (-not (Test-Path -Path $destinationFolder -PathType Container)) {
+    Try {
+        New-Item -ItemType Directory -Path $destinationFolder -Force -ErrorAction Stop
+        Write-Host "Successfully created destination folder: $destinationFolder"
+    } Catch {
+        Write-Error "Failed to create destination folder $destinationFolder. Error: $($_.Exception.Message)"
+        Exit 1
+    }
+} Else {
+    Write-Host "Destination folder $destinationFolder already exists."
+}
+
+# 2. Download the ZIP file
+Write-Host "Downloading AzureBGInfo.zip from $downloadUrl..."
+Try {
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $tempZipPath -ErrorAction Stop
+    Write-Host "Successfully downloaded $tempZipFileName to $tempZipPath."
+} Catch {
+    Write-Error "Failed to download file from $downloadUrl. Error: $($_.Exception.Message)"
+    Write-Warning "Please check the URL and your internet connection."
+    Exit 1
+}
+
+# 3. Extract the ZIP file
+Write-Host "Extracting $tempZipFileName to $destinationFolder..."
+Try {
+    # Expand-Archive will overwrite existing files if -Force is used.
+    Expand-Archive -Path $tempZipPath -DestinationPath $destinationFolder -Force -ErrorAction Stop
+    Write-Host "Successfully extracted ZIP content to $destinationFolder."
+} Catch {
+    Write-Error "Failed to extract $tempZipFileName. Error: $($_.Exception.Message)"
+    Write-Warning "Ensure PowerShell version is 5.0 or higher for Expand-Archive."
+    # Clean up the downloaded ZIP file even if extraction fails, if desired
+    # Remove-Item -Path $tempZipPath -Force -ErrorAction SilentlyContinue
+    Exit 1
+} Finally {
+    # Clean up the downloaded ZIP file after attempting extraction
+    If (Test-Path -Path $tempZipPath) {
+        Write-Host "Removing temporary ZIP file: $tempZipPath"
+        Remove-Item -Path $tempZipPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# Construct full paths to the executable and .bgi file (assuming they are at the root of the ZIP)
+$fullBginfoExecutablePath = Join-Path -Path $destinationFolder -ChildPath $bginfoExecutableName
+$fullBgiFilePath = Join-Path -Path $destinationFolder -ChildPath $bgiFileName
+
+# Optional: Check if the expected BGInfo executable and .bgi file exist after extraction
+If (-not (Test-Path -Path $fullBginfoExecutablePath -PathType Leaf)) {
+    Write-Warning "BGInfo executable '$bginfoExecutableName' not found in $destinationFolder after extraction."
+    Write-Warning "Please check the contents of your ZIP file and the '\$bginfoExecutableName' variable."
+    # Exit 1 # Optionally exit if critical files are missing
+}
+If (-not (Test-Path -Path $fullBgiFilePath -PathType Leaf)) {
+    Write-Warning "BGInfo configuration file '$bgiFileName' not found in $destinationFolder after extraction."
+    Write-Warning "Please check the contents of your ZIP file and the '\$bgiFileName' variable."
+    # Exit 1 # Optionally exit if critical files are missing
+}
+
+# 4. Create Message.txt and Add Line
+$fullMessageFilePath = Join-Path -Path $destinationFolder -ChildPath $messageFileName
+Write-Host "Creating $fullMessageFilePath and adding text..."
+Try {
+    Set-Content -Path $fullMessageFilePath -Value $messageText -ErrorAction Stop
+    Write-Host "Successfully created $fullMessageFilePath with the specified message."
+} Catch {
+    Write-Error "Failed to create or write to $fullMessageFilePath. Error: $($_.Exception.Message)"
+    Exit 1
+}
+
+# 5. Run config.bgi using the extracted BGInfo executable
+Write-Host "Attempting to run BGInfo with $fullBgiFilePath..."
+Try {
+    # Arguments: path to .bgi file, /timer:0, /nolicprompt
+    $bginfoArguments = """$fullBgiFilePath"" /timer:0 /nolicprompt"
+
+    Write-Host "Executing: $fullBginfoExecutablePath $bginfoArguments"
+    Start-Process -FilePath $fullBginfoExecutablePath -ArgumentList $bginfoArguments -ErrorAction Stop
+    Write-Host "BGInfo started with $fullBgiFilePath."
+} Catch {
+    Write-Error "Failed to run BGInfo. Error: $($_.Exception.Message)"
+    Write-Warning "Ensure '$bginfoExecutableName' (from your ZIP) is a valid executable and '$bgiFileName' is a valid BGInfo config file."
+}
+
+
+#############BGINFO END################
+
 # System Configurations
 Write-Host "`n--- Applying System Configurations ---" -ForegroundColor Blue
 Disable-ServerManagerPopupRegistry      # Registry method for Server Manager popup
