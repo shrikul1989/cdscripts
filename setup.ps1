@@ -1,3 +1,75 @@
+[CmdletBinding()]
+param (
+    [Parameter(Mandatory=$true)]
+    [string]$CID,
+
+    [Parameter(Mandatory=$true)]
+    [string]$JumpCloudConnectKey
+
+    [Parameter(Mandatory=$true)]
+    [string]$MEURL
+)
+
+# Falcon Agent Installation Variables
+$falconInstallerURL = "https://cdfiles-infrastucture.s3.us-east-1.amazonaws.com/CwordStrikeFalcon-Installer.exe"
+$falconInstallerTempLocation = "C:\Windows\Temp\CSFalconAgentInstaller.exe"
+
+# JumpCloud Agent Installation Variables
+$jumpCloudInstallerURL = "https://raw.githubusercontent.com/TheJumpCloud/support/master/scripts/windows/InstallWindowsAgent.ps1"
+$jumpCloudInstallerTempLocation = "C:\Windows\Temp\InstallWindowsAgent.ps1"
+
+# ManageEngine Agent Installation Variables
+$manageEngineInstallerURL = "https://patch.manageengine.com/download?encapiKey=wSsVR61xrx70DKornTGqJbs%2BmQhWBFijRk99jAah4yP%2FHPzF8cc%2FwkydAgHxT%2FkdGWU7EmRAoLp6zhwE0DYJit0tzFBWCyiF9mqRe1U4J3x18bntw2XOD2s%3D&os=windows"
+$manageEngineInstallerTempLocation = "$env:windir\temp\DCAgent.exe"
+
+# Set security protocol for downloads
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+# --- Start JumpCloud Agent Installation ---
+
+Write-Host "--- Checking for JumpCloud Agent ---"
+if (Get-Service "JumpCloudService" -ErrorAction SilentlyContinue) {
+    Write-Host "JumpCloud Agent already installed, nothing to do."
+} else {
+    Write-Host "JumpCloud Agent not installed. Downloading now."
+    try {
+        Invoke-WebRequest -Uri $jumpCloudInstallerURL -OutFile $jumpCloudInstallerTempLocation
+        Write-Host "Finished downloading JumpCloud Agent installer."
+
+        Write-Host "Installing JumpCloud Agent now, this may take a few minutes."
+        # This executes the downloaded script with the provided key
+        & $jumpCloudInstallerTempLocation -JumpCloudConnectKey $JumpCloudConnectKey
+        Write-Host "JumpCloud Agent installation command executed."
+    }
+    catch {
+        Write-Error "Failed to install JumpCloud Agent."
+        exit 1
+    }
+}
+
+Write-Host " " # Add a blank line for readability
+
+# --- Start ManageEngine Agent Installation ---
+
+Write-Host "--- Checking for ManageEngine Agent ---"
+if (Get-Service "ManageEngineDCAgent" -ErrorAction SilentlyContinue) {
+    Write-Host "ManageEngine Agent already installed, nothing to do."
+} else {
+    Write-Host "ManageEngine Agent not installed. Downloading now."
+    try {
+        Invoke-WebRequest -Uri $MEURL -OutFile $manageEngineInstallerTempLocation
+        Write-Host "Finished downloading ManageEngine Agent installer."
+
+        Write-Host "Installing ManageEngine Agent now, this may take a few minutes."
+        Start-Process -FilePath $manageEngineInstallerTempLocation -Wait -ArgumentList "/silent"
+        Write-Host "ManageEngine Agent installation command executed."
+    }
+    catch {
+        Write-Error "Failed to install ManageEngine Agent."
+        exit 1
+    }
+}
+
 #-----------------------------------------------------------------------------------------------------------------------
 # Script: Azure VM Initial Setup
 # Description: Automates common setup tasks for new Azure Virtual Machines.
@@ -314,7 +386,7 @@ Install-Chrome
 Install-PsTools
 Install-NotepadPlusPlus
 
-Set-TimeZone -Id "Pacific Standard Time"
+Set-TimeZone -Id "Eastern Standard Time"
 
 #############BGINFO################
 
@@ -326,7 +398,7 @@ $tempZipPath = Join-Path -Path $env:TEMP -ChildPath $tempZipFileName # Saves ZIP
 $bginfoExecutableName = "Bginfo.exe" # Or "Bginfo64.exe" - ensure this matches the file in your ZIP
 $bgiFileName = "config.bgi"          # Ensure this matches the .bgi file in your ZIP
 $messageFileName = "Message.txt"
-$messageText = "VTA Production Application Server"
+$messageText = "Application/Test Server"
 
 # --- Script Logic ---
 
@@ -419,6 +491,7 @@ Try {
 }
 
 
+
 #############BGINFO END################
 
 # System Configurations
@@ -433,6 +506,33 @@ Set-WindowsUpdateManual
 Disable-IPv6Adapters
 Show-HiddenFilesAndExtensions
 Disable-IEHardening
+
+
+
+# --- Start Falcon Agent Installation ---
+
+Write-Host "--- Checking for Falcon Agent ---"
+if (Get-Service "CSFalconService" -ErrorAction SilentlyContinue) {
+    Write-Host "Falcon Agent already installed, nothing to do."
+} else {
+    Write-Host "Falcon Agent not installed. Downloading now."
+    try {
+        Invoke-WebRequest -Uri $falconInstallerURL -OutFile $falconInstallerTempLocation
+        Write-Host "Finished downloading Falcon Agent installer."
+
+        Write-Host "Installing Falcon Agent now, this may take a few minutes."
+        $args = @("/install","/quiet","/norestart","CID=$CID")
+        $installerProcess = Start-Process -FilePath $falconInstallerTempLocation -Wait -PassThru -ArgumentList $args
+        Write-Host "Falcon Agent installer returned $($installerProcess.ExitCode)."
+    }
+    catch {
+        Write-Error "Failed to install Falcon Agent."
+        exit 1
+    }
+}
+
+Write-Host " " # Add a blank line for readability
+
 
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host "All tasks completed!" -ForegroundColor Cyan
